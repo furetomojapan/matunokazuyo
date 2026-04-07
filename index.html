@@ -79,7 +79,7 @@
 
     <script type="text/babel">
         const { useState, useEffect, useRef, useMemo } = React;
-        const { motion, AnimatePresence, useScroll, useTransform } = Motion; // Framer Motion UMD global is 'Motion'
+        const { motion, AnimatePresence, useScroll, useTransform } = Motion;
 
         // --- Lucide Icon Component ---
         const Icon = ({ name, size = 24, className = "" }) => {
@@ -87,7 +87,6 @@
             
             useEffect(() => {
                 if (iconRef.current) {
-                    // Initialize lucide icons for this element
                     lucide.createIcons({
                         attrs: {
                             'stroke-width': 2,
@@ -107,9 +106,9 @@
 
         // --- Fallback Data ---
         const fallbackData = [
-            { date: "2026.04.15", event: "春の癒やしマルシェ出店", time_range: "10:00 - 16:00", location: "〇〇広場" },
-            { date: "2026.04.22", event: "エンヨー実演販売会", time_range: "11:00 - 17:00", location: "Diamond Sweet Pea 店内" },
-            { date: "2026.05.03", event: "GWデトックスキャンペーン", time_range: "10:00 - 18:00", location: "YOSA PARK" }
+            { date: "2026.04.15", event: "春の癒やしマルシェ出店", time_range: "10:00 - 16:00", location: "〇〇広場", url: "https://www.instagram.com/kenkazu1105/" },
+            { date: "2026.04.22", event: "エンヨー実演販売会", time_range: "11:00 - 17:00", location: "Diamond Sweet Pea 店内", url: "" },
+            { date: "2026.05.03", event: "GWデトックスキャンペーン", time_range: "10:00 - 18:00", location: "YOSA PARK", url: "https://line.me/" }
         ];
 
         // --- Sakura Petal Component ---
@@ -169,26 +168,44 @@
                 window.location.href = mailtoLink;
             };
 
-            const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR2MVBTBNkCezFbOBS4Dv8XrjJPPfxG9p4s14JNO0pVqKVg-DIHg9NJt8wjcjyz8jvoYA-aD0jg3GWU/pub?gid=1179263377&single=true&output=csv";
+            // 【重要】ここにスプレッドシートの「ウェブに公開（CSV）」で取得したURLを貼り付けます
+            // 例: "https://docs.google.com/spreadsheets/d/e/2PACX-xxxxxxx/pub?output=csv"
+            const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vReBRDXoMYEb3LxOVmaa_m62latUNmw6ggQog4YcPpQ-lK-VeN3mB4HSdCYfAKA7sWhXHhMkwiAJFDs/pub?gid=0&single=true&output=csv";
 
             useEffect(() => {
                 const fetchSchedule = async () => {
+                    // URLが初期値（日本語のまま）の場合は、取得処理を行わず仮データを表示し続ける
+                    if (!SHEET_CSV_URL.startsWith("http")) return;
+
                     try {
                         const response = await fetch(SHEET_CSV_URL);
                         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                         const csvText = await response.text();
+                        
                         Papa.parse(csvText, {
-                            header: true,
+                            header: false, // 見出し名に依存せず、A列=0, B列=1という「列の順番」でデータを取得する設定
                             skipEmptyLines: 'greedy',
-                            transformHeader: (header) => header.trim().replace(/^\uFEFF/, ""),
                             complete: (results) => {
-                                if (results.data && Array.isArray(results.data)) {
-                                    const validData = results.data.filter(item => item && typeof item === 'object' && (item.date || item.event));
-                                    if (validData.length > 0) setSchedule(validData);
+                                if (results.data && results.data.length > 1) {
+                                    // 1行目（見出し）を飛ばして、2行目から処理を開始（slice(1)）
+                                    const validData = results.data.slice(1).map(cells => ({
+                                        // A列=0(日付), B列=1(イベント), C列=2(時間), D列=3(場所), E列=4(URL)
+                                        date: cells[0] ? cells[0].trim() : "",
+                                        event: cells[1] ? cells[1].trim() : "",
+                                        time_range: cells[2] ? cells[2].trim() : "",
+                                        location: cells[3] ? cells[3].trim() : "",
+                                        url: cells[4] ? cells[4].trim() : ""
+                                    })).filter(item => item.date || item.event); // 日付かイベント名のどちらかがあれば有効なデータとする
+                                    
+                                    if (validData.length > 0) {
+                                        setSchedule(validData);
+                                    }
                                 }
                             }
                         });
-                    } catch (error) { console.error("Failed to fetch schedule:", error); }
+                    } catch (error) { 
+                        console.error("Failed to fetch schedule. Showing fallback data.", error); 
+                    }
                 };
                 fetchSchedule();
             }, []);
@@ -313,18 +330,31 @@
                                 <div className="h-[1px] flex-grow bg-white/20" />
                             </div>
                             <div className="space-y-0">
-                                {schedule.map((item, idx) => (
-                                    <motion.div key={idx} initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ delay: idx * 0.1 }} className="group flex flex-col md:flex-row md:items-center justify-between py-10 border-b border-white/10 hover:bg-white/5 transition-colors px-4">
-                                        <div className="flex flex-col md:flex-row md:items-baseline gap-4 md:gap-8 mb-4 md:mb-0">
-                                            <span className="text-sakura-pink font-serif text-xl whitespace-nowrap">{item.date}</span>
-                                            <div>
-                                                <h3 className="text-2xl font-serif">{item.event}</h3>
-                                                {item.time_range && <div className="flex items-center gap-2 text-neutral-400 text-xs mt-1 uppercase tracking-widest"><Icon name="clock" size={12} />{item.time_range}</div>}
+                                {schedule.map((item, idx) => {
+                                    // URLがある場合はhoverエフェクトを強調し、リンクアイコンを表示
+                                    const content = (
+                                        <motion.div key={idx} initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ delay: idx * 0.1 }} className={`group flex flex-col md:flex-row md:items-center justify-between py-10 border-b border-white/10 transition-colors px-4 ${item.url ? 'hover:bg-white/10 cursor-pointer' : 'hover:bg-white/5'}`}>
+                                            <div className="flex flex-col md:flex-row md:items-baseline gap-4 md:gap-8 mb-4 md:mb-0">
+                                                <span className="text-sakura-pink font-serif text-xl whitespace-nowrap">{item.date}</span>
+                                                <div>
+                                                    <h3 className="text-2xl font-serif flex items-center gap-3">
+                                                        {item.event}
+                                                        {item.url && <Icon name="external-link" size={16} className="text-neutral-500 group-hover:text-sakura-pink transition-colors" />}
+                                                    </h3>
+                                                    {item.time_range && <div className="flex items-center gap-2 text-neutral-400 text-xs mt-1 uppercase tracking-widest"><Icon name="clock" size={12} />{item.time_range}</div>}
+                                                </div>
                                             </div>
-                                        </div>
-                                        <div className="flex items-center gap-2 text-neutral-400 text-sm uppercase tracking-widest"><Icon name="map-pin" size={14} />{item.location}</div>
-                                    </motion.div>
-                                ))}
+                                            <div className="flex items-center gap-2 text-neutral-400 text-sm uppercase tracking-widest"><Icon name="map-pin" size={14} />{item.location}</div>
+                                        </motion.div>
+                                    );
+
+                                    // URLがあればaタグで囲み、なければそのまま表示
+                                    return item.url ? (
+                                        <a key={idx} href={item.url} target="_blank" rel="noopener noreferrer" className="block outline-none">
+                                            {content}
+                                        </a>
+                                    ) : content;
+                                })}
                             </div>
                         </div>
                     </section>
